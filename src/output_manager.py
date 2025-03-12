@@ -2,7 +2,7 @@ import subprocess
 import os
 import signal
 import time
-import fcntl
+
 import struct
 from pynput.keyboard import Key, Controller as PynputController
 
@@ -158,6 +158,8 @@ class UinputBackend:
     SHIFT_CHARS = '~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
     def __init__(self, config):
+        import fcntl
+
         self.config = config
         self.uinput_fd = None
         self.device_name = 'WhisperWriter Virtual Keyboard'.encode()

@@ -1,6 +1,6 @@
 cffi==1.17.1
-evdev==1.7.1
 numpy==2.1.1
+openai==1.57.4
 PyAudio==0.2.14
 pycparser==2.22
 pynput==1.7.7
