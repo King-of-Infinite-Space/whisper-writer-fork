@@ -15,7 +15,7 @@ class TrayIcon(QObject):
 
     def create_tray_icon(self):
         app = QApplication.instance()
-        self.tray_icon = QSystemTrayIcon(QIcon(os.path.join('assets', 'ww-logo.png')), app)
+        self.tray_icon = QSystemTrayIcon(QIcon(os.path.join('assets', 'ww-logo-new.png')), app)
 
         tray_menu = QMenu()
 
