@@ -5,7 +5,7 @@ import time
 
 import struct
 from pynput.keyboard import Key, Controller as PynputController
-
+import pyperclip
 from config_manager import ConfigManager
 from event_bus import EventBus
 
@@ -19,7 +19,7 @@ class OutputManager:
         self.dotool_process = None
         self.uinput_backend = None
 
-        if self.output_method == 'pynput':
+        if self.output_method == 'pynput' or self.output_method == 'pynput-pyperclip':
             self.keyboard = PynputController()
         elif self.output_method == 'dotool':
             self._initialize_dotool()
@@ -31,6 +31,8 @@ class OutputManager:
         interval = self.config.get('writing_key_press_delay')
         if self.output_method == 'pynput':
             self._typewrite_pynput(text, interval)
+        if self.output_method == 'pynput-pyperclip':
+            self._typewrite_pynput_pyperclip(text)
         elif self.output_method == 'ydotool':
             self._typewrite_ydotool(text, interval)
         elif self.output_method == 'dotool':
@@ -62,6 +64,16 @@ class OutputManager:
             self.keyboard.press(Key.backspace)
             self.keyboard.release(Key.backspace)
             time.sleep(0.05)
+
+    def _typewrite_pynput_pyperclip(self, text):
+        """Simulate typing using pynput and pyperclip."""
+        prev_clipboard = pyperclip.paste()
+        pyperclip.copy(text)
+        self.keyboard.press(Key.ctrl)
+        self.keyboard.press('v')
+        self.keyboard.release('v')
+        self.keyboard.release(Key.ctrl)
+        pyperclip.copy(prev_clipboard)
 
     def _typewrite_ydotool(self, text, interval):
         """Simulate typing using ydotool."""
