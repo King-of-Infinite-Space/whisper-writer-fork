@@ -195,7 +195,7 @@ class AudioManager:
                                 f'Duration: {duration:.2f} seconds')
 
         min_duration_ms = ConfigManager.get_value(
-            f'recording_options.{context.profile.name}.min_duration', 200)
+            f'recording_options.{context.profile.name}.min_duration') or 200
 
         if audio_config['use_vad'] and not speech_detected:
             ConfigManager.log_print('Discarded because no speech has been detected.')
