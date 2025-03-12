@@ -16,6 +16,10 @@ global_options:
     value: true
     type: bool
     description: "Set to true to print various logging messages to the terminal."
+  start_minimized:
+    value: false
+    type: bool
+    description: "Set to true to start the application minimized to the system tray and ready for transcription immediately"
   status_update_mode:
     value: Window
     type: str
@@ -177,8 +181,6 @@ available_backends:
       value: whisper-1
       type: str
       description: "The model to use for transcription. Currently only 'whisper-1' is available."
-      options:
-        - whisper-1
     base_url:
       value: https://api.openai.com/v1
       type: str
