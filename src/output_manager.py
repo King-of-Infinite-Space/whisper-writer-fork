@@ -73,6 +73,8 @@ class OutputManager:
         self.keyboard.press('v')
         self.keyboard.release('v')
         self.keyboard.release(Key.ctrl)
+        # without this delay, somehow prev clipboard content is pasted
+        time.sleep(0.1)
         pyperclip.copy(prev_clipboard)
 
     def _typewrite_ydotool(self, text, interval):
