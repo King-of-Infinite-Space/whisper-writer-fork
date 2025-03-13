@@ -133,4 +133,5 @@ config.yaml
 
 # local folders
 model/
+debug_audio/
 local/
