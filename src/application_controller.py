@@ -130,10 +130,12 @@ class ApplicationController:
 
     def run(self):
         """Run the main application loop and return the exit code."""
-        self.ui_manager.show_main_window()
         if ConfigManager.get_value('global_options.start_minimized'):
             self.ui_manager.handle_start_listening()
-            # auto start listening, the window will be hidden on init success 
+            # auto start listening
+        else:
+            self.ui_manager.main_window.show()
+        self.ui_manager.tray_icon.show()
         exit_code = self.ui_manager.run_event_loop()  # Run QT event loop
         self.cleanup()
         return exit_code

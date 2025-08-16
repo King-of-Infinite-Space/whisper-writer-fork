@@ -40,11 +40,6 @@ class UIManager:
         self.event_bus.subscribe("transcription_error", self.show_error_message)
         self.event_bus.subscribe("initialization_successful", self.hide_main_window)
 
-    def show_main_window(self):
-        """Display the main application window and show the system tray icon."""
-        self.main_window.show()
-        self.tray_icon.show()
-
     def handle_start_listening(self):
         """Handle the start listening event."""
         self.event_bus.emit("start_listening")
