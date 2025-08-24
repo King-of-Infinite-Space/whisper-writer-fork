@@ -66,15 +66,27 @@ class OutputManager:
             time.sleep(0.05)
 
     def _typewrite_pynput_pyperclip(self, text):
-        """Simulate typing using pynput and pyperclip."""
+        """Simulate typing using pynput and pyperclip with clipboard verification to avoid pasting old content."""
         prev_clipboard = pyperclip.paste()
+
+        # Copy desired text to clipboard
         pyperclip.copy(text)
-        self.keyboard.press(Key.ctrl)
-        self.keyboard.press('v')
-        self.keyboard.release('v')
-        self.keyboard.release(Key.ctrl)
-        # without this delay, somehow prev clipboard content is pasted
-        time.sleep(0.1)
+
+        # Wait until the system clipboard actually reflects the new text (race condition safeguard)
+        for _ in range(50):  # up to 500ms total (50 * 10ms)
+            if pyperclip.paste() == text:
+                break
+            time.sleep(0.01)
+
+        # Paste the text
+        with self.keyboard.pressed(Key.ctrl):
+            self.keyboard.press('v')
+            self.keyboard.release('v')
+
+        # Give target application time to read the clipboard before restoring previous content
+        time.sleep(0.2)
+
+        # Restore previous clipboard
         pyperclip.copy(prev_clipboard)
 
     def _typewrite_ydotool(self, text, interval):
