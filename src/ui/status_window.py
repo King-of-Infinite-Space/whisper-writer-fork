@@ -14,7 +14,7 @@ class StatusWindow(BaseWindow):
         """
         Initialize the status window.
         """
-        super().__init__('WhisperWriter Status', 320, 120)
+        super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                             | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
 

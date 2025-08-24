@@ -27,12 +27,12 @@ class MainWindow(BaseWindow):
         """
         start_btn = QPushButton('Start')
         start_btn.setFont(QFont('Segoe UI', 10))
-        start_btn.setFixedSize(120, 60)
+        start_btn.setFixedSize(80, 40)
         start_btn.clicked.connect(self.start_pressed)
 
         settings_btn = QPushButton('Settings')
         settings_btn.setFont(QFont('Segoe UI', 10))
-        settings_btn.setFixedSize(120, 60)
+        settings_btn.setFixedSize(80, 40)
         settings_btn.clicked.connect(self.open_settings.emit)
 
         button_layout = QHBoxLayout()

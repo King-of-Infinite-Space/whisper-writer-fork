@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayo
 
 
 class BaseWindow(QMainWindow):
-    def __init__(self, title, width, height):
+    def __init__(self, title='Whisper Writer', width=240, height=120):
         """
         Initialize the base window.
         """
