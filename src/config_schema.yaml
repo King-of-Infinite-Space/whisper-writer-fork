@@ -103,6 +103,8 @@ profiles:
           - dotool
           - uinput
           - pynput-pyperclip
+          - uinput-pyperclip
+          - pyperclip
       enabled_scripts:
         value: []
         type: list

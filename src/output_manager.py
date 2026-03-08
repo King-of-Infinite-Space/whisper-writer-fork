@@ -1,3 +1,4 @@
+import fcntl
 import subprocess
 import os
 import signal
@@ -23,7 +24,7 @@ class OutputManager:
             self.keyboard = PynputController()
         elif self.output_method == 'dotool':
             self._initialize_dotool()
-        elif self.output_method == 'uinput':
+        elif self.output_method == 'uinput' or self.output_method == 'uinput-pyperclip':
             self.uinput_backend = UinputBackend(self.config)
 
     def typewrite(self, text):
@@ -31,7 +32,7 @@ class OutputManager:
         interval = self.config.get('writing_key_press_delay')
         if self.output_method == 'pynput':
             self._typewrite_pynput(text, interval)
-        if self.output_method == 'pynput-pyperclip':
+        elif self.output_method == 'pynput-pyperclip':
             self._typewrite_pynput_pyperclip(text)
         elif self.output_method == 'ydotool':
             self._typewrite_ydotool(text, interval)
@@ -39,6 +40,10 @@ class OutputManager:
             self._typewrite_dotool(text, interval)
         elif self.output_method == 'uinput':
             self.uinput_backend.typewrite(text, interval)
+        elif self.output_method == 'uinput-pyperclip':
+            self._typewrite_uinput_pyperclip(text)
+        elif self.output_method == 'pyperclip':
+            pyperclip.copy(text)
 
     def backspace(self, count: int):
         """Simulate pressing the backspace key 'count' times."""
@@ -48,8 +53,10 @@ class OutputManager:
             self._backspace_ydotool(count)
         elif self.output_method == 'dotool':
             self._backspace_dotool(count)
-        elif self.output_method == 'uinput':
+        elif self.output_method == 'uinput' or self.output_method == 'uinput-pyperclip':
             self.uinput_backend.backspace(count)
+        elif self.output_method == 'pyperclip':
+            pass
 
     def _typewrite_pynput(self, text, interval):
         """Simulate typing using pynput."""
@@ -66,9 +73,7 @@ class OutputManager:
             time.sleep(0.05)
 
     def _typewrite_pynput_pyperclip(self, text):
-        """Simulate typing using pynput and pyperclip with clipboard verification to avoid pasting old content."""
-        prev_clipboard = pyperclip.paste()
-
+        """Simulate typing using pynput and pyperclip with clipboard verification."""
         # Copy desired text to clipboard
         pyperclip.copy(text)
 
@@ -83,11 +88,20 @@ class OutputManager:
             self.keyboard.press('v')
             self.keyboard.release('v')
 
-        # Give target application time to read the clipboard before restoring previous content
-        time.sleep(0.2)
+    def _typewrite_uinput_pyperclip(self, text):
+        """Simulate typing using uinput and pyperclip with clipboard verification."""
+        # Copy desired text to clipboard
+        pyperclip.copy(text)
 
-        # Restore previous clipboard
-        pyperclip.copy(prev_clipboard)
+        # Wait until the system clipboard actually reflects the new text (race condition safeguard)
+        for _ in range(50):  # up to 500ms total (50 * 10ms)
+            if pyperclip.paste() == text:
+                break
+            time.sleep(0.01)
+
+        time.sleep(0.02)
+        # Paste the text
+        self.uinput_backend.paste()
 
     def _typewrite_ydotool(self, text, interval):
         """Simulate typing using ydotool."""
@@ -145,9 +159,10 @@ class OutputManager:
         """Perform cleanup operations, such as terminating the dotool process."""
         if self.output_method == 'dotool':
             self._terminate_dotool()
-        elif self.output_method == 'uinput':
-            if self.uinput_backend:
-                self.uinput_backend.cleanup()
+        
+        if self.uinput_backend:
+            self.uinput_backend.cleanup()
+            self.uinput_backend = None
 
 
 class UinputBackend:
@@ -184,8 +199,6 @@ class UinputBackend:
     SHIFT_CHARS = '~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
     def __init__(self, config):
-        import fcntl
-
         self.config = config
         self.uinput_fd = None
         self.device_name = 'WhisperWriter Virtual Keyboard'.encode()
@@ -267,6 +280,15 @@ class UinputBackend:
             self._press_key(backspace_code)
             time.sleep(0.005)  # Small delay between backspaces
             self._release_key(backspace_code)
+
+    def paste(self):
+        ctrl_code = self.KEY_CODES['KEY_LEFTCTRL']
+        v_code = self.KEY_CODES['v']
+        self._press_key(ctrl_code)
+        self._press_key(v_code)
+        time.sleep(0.01)
+        self._release_key(v_code)
+        self._release_key(ctrl_code)
 
     def cleanup(self):
         if self.uinput_fd:
