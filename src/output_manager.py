@@ -192,7 +192,9 @@ class UinputBackend:
         'KEY_LEFTCTRL': 29, 'KEY_RIGHTCTRL': 97,
         'KEY_LEFTALT': 56, 'KEY_RIGHTALT': 100,
         'KEY_LEFTMETA': 125, 'KEY_RIGHTMETA': 126,
-        'KEY_BACKSPACE': 14
+        'KEY_BACKSPACE': 14,
+        'KEY_CAPSLOCK': 58,
+        'KEY_F13': 183
     }
 
     SHIFT_CHARS = '~!@#$%^&*()_+{}|:"<>?ABCDEFGHIJKLMNOPQRSTUVWXYZ'

@@ -14,7 +14,8 @@ class MacroManager:
         
         # List of registered macro handlers
         self.macro_handlers = [
-            self._create_kde_clipboard_macro()
+            self._create_kde_clipboard_macro(),
+            self._create_caps_lock_to_f13_macro()
         ]
         
         self.event_bus.subscribe("input_event", self.handle_input)
@@ -33,6 +34,57 @@ class MacroManager:
         # Delegate the event to all registered macro handlers
         for handler in self.macro_handlers:
             handler(key, event_type)
+
+    def _create_caps_lock_to_f13_macro(self):
+        """Factory method for Caps Lock to F13 mapping with modifier detection."""
+        state = {'is_down': False, 'cancel_caps': False, 'press_time': 0.0}
+        
+        def handler(key, event_type):
+            if not self.uinput_backend:
+                return
+                
+            f13_code = self.uinput_backend.KEY_CODES['KEY_F13']
+            caps_code = self.uinput_backend.KEY_CODES['KEY_CAPSLOCK']
+            
+            if key == KeyCode.CAPS_LOCK:
+                if event_type == InputEvent.KEY_PRESS:
+                    state['is_down'] = True
+                    state['cancel_caps'] = False
+                    state['press_time'] = time.time()
+                    self.uinput_backend._press_key(f13_code)
+
+                elif event_type == InputEvent.KEY_RELEASE:
+                    state['is_down'] = False
+                    self.uinput_backend._release_key(f13_code)
+                    
+                    # If Caps Lock was used as a modifier (another key was pressed while down),
+                    # we counter-toggle it AFTER physical release to avoid OS key aggregation blocking it.
+                    if state['cancel_caps']:
+                        state['press_time'] = 0.0  # Prevent subsequent keys from canceling again
+                        def delayed_caps_cancel():
+                            time.sleep(0.05)  # Ensure physical release is processed by OS
+                            self.uinput_backend._press_key(caps_code)
+                            self.uinput_backend._release_key(caps_code)
+                            state['cancel_caps'] = False  # Reset
+                        
+                        threading.Thread(target=delayed_caps_cancel).start()
+
+            else:
+                # If another key is pressed within 1.0 second of Caps Lock press
+                if event_type == InputEvent.KEY_PRESS:
+                    if time.time() - state['press_time'] <= 1.0:
+                        if state['is_down']:
+                            # Will be canceled when Caps Lock is released
+                            state['cancel_caps'] = True
+                        else:
+                            # Caps Lock was already released (sequential shortcut), cancel it immediately
+                            state['press_time'] = 0.0  # Prevent subsequent keys from canceling again
+                            def immediate_caps_cancel():
+                                self.uinput_backend._press_key(caps_code)
+                                self.uinput_backend._release_key(caps_code)
+                            threading.Thread(target=immediate_caps_cancel).start()
+
+        return handler
 
     def _create_kde_clipboard_macro(self):
         """Factory method that returns a stateful handler for the KDE Clipboard Macro."""
@@ -61,7 +113,7 @@ class MacroManager:
                     if self.uinput_backend:
                         def delayed_paste():
                             """Waits a tiny bit for KDE Clipboard to close and return focus, then pastes."""
-                            time.sleep(0.12)
+                            time.sleep(0.15)
                             self.uinput_backend.paste()
                             
                         # Run paste in a separate thread to avoid blocking the main event loop
