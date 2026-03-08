@@ -127,6 +127,7 @@ class InputManager:
 
     def on_input_event(self, event):
         """Handle input events and trigger callbacks if the key chord becomes active."""
+        self.event_bus.emit("input_event", event)
         key, event_type = event
         for profile_name, key_chord in self.shortcuts.items():
             was_active = key_chord.is_active()

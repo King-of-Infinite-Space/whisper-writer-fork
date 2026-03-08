@@ -5,10 +5,10 @@ from typing import Dict, Optional
 
 from audio_manager import AudioManager
 from input_manager import InputManager
+from macro_manager import MacroManager
 from enums import RecordingMode
 from profile import Profile
 from config_manager import ConfigManager
-from play_wav import play_wav
 
 
 class ApplicationController:
@@ -30,6 +30,7 @@ class ApplicationController:
         self.listening = False
         self.audio_manager = None
         self.input_manager = None
+        self.macro_manager = None
         self.manually_stopped_profiles = set()  # For tracking continuous mode profiles
 
         self.active_profiles: Dict[str, Profile] = {}
@@ -146,6 +147,7 @@ class ApplicationController:
             'global_options.status_update_mode')
         self.input_manager = InputManager(self.event_bus)
         self.audio_manager = AudioManager(self.event_bus)
+        self.macro_manager = MacroManager(self.event_bus)
         self.input_manager.start()
         self.audio_manager.start()
 
@@ -196,6 +198,9 @@ class ApplicationController:
         if self.input_manager:
             self.input_manager.cleanup()
             self.input_manager = None
+        if self.macro_manager:
+            self.macro_manager.cleanup()
+            self.macro_manager = None
 
     def _get_profile_for_session(self, session_id: str) -> Optional[Profile]:
         """Get the profile associated with a given session ID."""
