@@ -1,4 +1,3 @@
-import fcntl
 import subprocess
 import os
 import signal
@@ -205,6 +204,7 @@ class UinputBackend:
         self.initialize_device()
 
     def initialize_device(self):
+        import fcntl
         self.uinput_fd = os.open('/dev/uinput', os.O_WRONLY | os.O_NONBLOCK)
 
         # Enable key and synchronization events
@@ -292,5 +292,6 @@ class UinputBackend:
 
     def cleanup(self):
         if self.uinput_fd:
+            import fcntl
             fcntl.ioctl(self.uinput_fd, self.UI_DEV_DESTROY)
             os.close(self.uinput_fd)
