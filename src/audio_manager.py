@@ -7,6 +7,7 @@ import os
 import datetime
 from collections import namedtuple
 from queue import Queue, Empty
+from scipy import signal
 
 from config_manager import ConfigManager
 from event_bus import EventBus
@@ -136,7 +137,11 @@ class AudioManager:
         vad = webrtcvad.Vad(2) if audio_config['use_vad'] else None
 
         while self.state != AudioManagerState.STOPPED and self.recording_queue.empty():
-            frame = stream.read(audio_config['frame_size'])
+            try:
+                frame = stream.read(audio_config['frame_size'], exception_on_overflow=False)
+            except Exception as e:
+                ConfigManager.log_print(f"Error reading audio: {e}")
+                break
             frame_array = self._process_audio_frame(frame, audio_config['gain'])
             recording.extend(frame_array)
 
@@ -182,8 +187,13 @@ class AudioManager:
         # which will be processed in the next iteration
 
     def _cleanup_audio_resources(self, stream, debug_wav_file):
-        stream.stop_stream()
-        stream.close()
+        try:
+            if stream is not None:
+                stream.stop_stream()
+                stream.close()
+        except Exception:
+            pass
+
         if debug_wav_file:
             debug_wav_file.close()
 
@@ -241,7 +251,23 @@ class AudioManager:
             ConfigManager.log_print(f"Using specified input device: {device_info} "
                                     f"(index: {device_index})")
             return device_index
-        except (ValueError, IOError):
+        except (ValueError, TypeError):
+            # If not an integer, try to find by name
+            for i in range(self.pyaudio.get_device_count()):
+                info = self.pyaudio.get_device_info_by_index(i)
+                if device in info['name'] and info['maxInputChannels'] > 0:
+                    device_info = get_device_info(i)
+                    ConfigManager.log_print(f"Found and using input device by name: {device_info} "
+                                            f"(index: {i})")
+                    return i
+            
+            ConfigManager.log_print(f"Could not find device by name or index: {device}. Using default.")
+            default_index = get_default_input_device_index()
+            device_info = get_device_info(default_index)
+            ConfigManager.log_print(f"Selected default input device: {device_info} "
+                                    f"(index: {default_index})")
+            return default_index
+        except IOError:
             ConfigManager.log_print(f"Invalid device index: {device}. Using default.")
             default_index = get_default_input_device_index()
             device_info = get_device_info(default_index)
@@ -257,6 +283,13 @@ class AudioManager:
 
     def _push_audio_chunk(self, context: RecordingContext, audio_data: np.ndarray,
                           sample_rate: int, channels: int):
+        target_sample_rate = 16000
+        if sample_rate != target_sample_rate:
+            # Resample audio to 16000Hz
+            num_samples = int(len(audio_data) * target_sample_rate / sample_rate)
+            audio_data = signal.resample_poly(audio_data, target_sample_rate, sample_rate)
+            sample_rate = target_sample_rate
+
         context.profile.audio_queue.put({
             'session_id': context.session_id,
             'sample_rate': sample_rate,
@@ -270,3 +303,4 @@ class AudioManager:
         self.thread = None
         self.pyaudio = None
         self.recording_queue = None
+

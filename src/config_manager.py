@@ -54,6 +54,8 @@ class ConfigValidator:
                 return False
             elif schema['type'] == 'int or null' and not (isinstance(value, int) or value is None):
                 return False
+            elif schema['type'] == 'int, str or null' and not (isinstance(value, (int, str)) or value is None):
+                return False
             elif schema['type'] == 'dir_path':
                 return isinstance(value, str) and (value == '' or os.path.isdir(value))
         if 'options' in schema and value not in schema['options']:
@@ -75,6 +77,8 @@ class ConfigValidator:
         elif schema.get('type') == 'list':
             return []
         elif schema.get('type') == 'int or null':
+            return None
+        elif schema.get('type') == 'int, str or null':
             return None
         else:
             return {}
@@ -346,7 +350,7 @@ class ConfigManager:
             if isinstance(value, dict) and 'value' in value:
                 section[key] = value['value']
             elif isinstance(value, dict):
-                if value.get('type') == 'int or null':
+                if value.get('type') in ('int or null', 'int, str or null'):
                     section[key] = None
                 else:
                     section[key] = cls._create_default_section(value)

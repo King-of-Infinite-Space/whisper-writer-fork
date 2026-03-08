@@ -57,8 +57,8 @@ profiles:
     recording_options:
       sound_device:
         value: null
-        type: "int or null"
-        description: "The numeric index of the sound device to use for recording. Run `python list_audio_devices.py` to to find device numbers."
+        type: "int, str or null"
+        description: "The numeric index or the name of the sound device to use for recording. Run `python list_audio_devices.py` to to find device numbers or names."
       gain:
         value: 1.0
         type: float
