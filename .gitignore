@@ -135,3 +135,6 @@ config.yaml
 model/
 debug_audio/
 local/
+# Custom folders
+macros/
+scripts/
