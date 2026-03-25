@@ -1,7 +1,22 @@
 import os
-from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QTabWidget, QGroupBox, QGridLayout,
-                             QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QFileDialog,
-                             QScrollArea, QToolButton, QMessageBox, QVBoxLayout, QInputDialog)
+from PyQt6.QtWidgets import (
+    QWidget,
+    QHBoxLayout,
+    QTabWidget,
+    QGroupBox,
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QComboBox,
+    QCheckBox,
+    QPushButton,
+    QFileDialog,
+    QScrollArea,
+    QToolButton,
+    QMessageBox,
+    QVBoxLayout,
+    QInputDialog,
+)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QIntValidator, QDoubleValidator
 
@@ -34,20 +49,22 @@ class SettingsWindow(QWidget):
         # Profile tabs
         profiles = ConfigManager.get_profiles()
         for profile in profiles:
-            profile_name = profile['name']
+            profile_name = profile["name"]
             profile_tab = self.create_profile_tab(profile_name)
             self.tabs.addTab(profile_tab, profile_name)
 
         # Add profile button
-        self.tabs.setCornerWidget(self.create_add_profile_button(), Qt.Corner.TopRightCorner)
+        self.tabs.setCornerWidget(
+            self.create_add_profile_button(), Qt.Corner.TopRightCorner
+        )
 
     def create_global_tab(self):
         tab = QScrollArea()
         tab_widget = QWidget()
         tab_layout = QVBoxLayout(tab_widget)
 
-        global_options = ConfigManager.get_section('global_options')
-        self.create_section_widgets(tab_layout, global_options, 'global_options')
+        global_options = ConfigManager.get_section("global_options")
+        self.create_section_widgets(tab_layout, global_options, "global_options")
 
         # Add stretch factor to push widgets to the top
         tab_layout.addStretch(1)
@@ -61,7 +78,7 @@ class SettingsWindow(QWidget):
         tab_widget = QWidget()
         tab_layout = QVBoxLayout()
 
-        profile_config = ConfigManager.get_section('profiles', profile_name)
+        profile_config = ConfigManager.get_section("profiles", profile_name)
 
         self.add_profile_sections(tab_layout, profile_name, profile_config)
         self.add_profile_management_buttons(tab_layout, profile_name)
@@ -73,30 +90,42 @@ class SettingsWindow(QWidget):
 
     def add_profile_sections(self, layout, profile_name, profile_config):
         # Define the order of sections
-        section_order = ['activation_key', 'backend_type', 'backend', 'recording_options',
-                         'post_processing']
+        section_order = [
+            "activation_key",
+            "backend_type",
+            "backend",
+            "recording_options",
+            "post_processing",
+        ]
 
         # Add sections in the specified order, then any remaining sections
-        for section_name in section_order + list(set(profile_config.keys()) - set(section_order)):
-            if section_name in profile_config and section_name != 'name':
+        for section_name in section_order + list(
+            set(profile_config.keys()) - set(section_order)
+        ):
+            if section_name in profile_config and section_name != "name":
                 self.add_section(layout, profile_name, profile_config, section_name)
 
     def add_section(self, layout, profile_name, profile_config, section_name):
         section = profile_config[section_name]
         if isinstance(section, dict):
-            group_box = QGroupBox(section_name.replace('_', ' ').capitalize())
+            group_box = QGroupBox(section_name.replace("_", " ").capitalize())
             group_box.setObjectName(f"{profile_name}_{section_name}")
             group_layout = QVBoxLayout()
-            self.create_section_widgets(group_layout, section,
-                                        f'profiles.{profile_name}.{section_name}')
+            self.create_section_widgets(
+                group_layout, section, f"profiles.{profile_name}.{section_name}"
+            )
             group_box.setLayout(group_layout)
             layout.addWidget(group_box)
         else:
-            widget = self.create_setting_widget(f'profiles.{profile_name}.{section_name}', section)
+            widget = self.create_setting_widget(
+                f"profiles.{profile_name}.{section_name}", section
+            )
             layout.addWidget(widget)
 
         # Add backend type change listener
-        if section_name == 'backend_type' and isinstance(widget.input_widget, QComboBox):
+        if section_name == "backend_type" and isinstance(
+            widget.input_widget, QComboBox
+        ):
             widget.input_widget.currentTextChanged.connect(
                 lambda value, pn=profile_name: self.update_backend_options(pn, value)
             )
@@ -111,7 +140,9 @@ class SettingsWindow(QWidget):
         layout.addWidget(rename_button)
 
     def rename_profile(self, old_name):
-        new_name, ok = QInputDialog.getText(self, 'Rename Profile', 'Enter new profile name:')
+        new_name, ok = QInputDialog.getText(
+            self, "Rename Profile", "Enter new profile name:"
+        )
         if ok and new_name:
             if ConfigManager.rename_profile(old_name, new_name):
                 # Update tab name
@@ -129,17 +160,21 @@ class SettingsWindow(QWidget):
                 self.update_active_profiles_widget()
 
                 # Inform user of successful rename
-                QMessageBox.information(self,
-                                        'Profile Renamed',
-                                        f'Profile "{old_name}" has been renamed to "{new_name}".')
+                QMessageBox.information(
+                    self,
+                    "Profile Renamed",
+                    f'Profile "{old_name}" has been renamed to "{new_name}".',
+                )
             else:
-                QMessageBox.warning(self,
-                                    'Rename Failed',
-                                    f'The name "{new_name}" is already in use or '
-                                    f'the profile could not be found.')
+                QMessageBox.warning(
+                    self,
+                    "Rename Failed",
+                    f'The name "{new_name}" is already in use or '
+                    f"the profile could not be found.",
+                )
 
     def update_backend_options(self, profile_name, backend_type):
-        ConfigManager.set_value(f'profiles.{profile_name}.backend_type', backend_type)
+        ConfigManager.set_value(f"profiles.{profile_name}.backend_type", backend_type)
 
         # Refresh the backend options
         backend_group = self.findChild(QGroupBox, f"{profile_name}_backend")
@@ -153,9 +188,10 @@ class SettingsWindow(QWidget):
                     widget.deleteLater()
 
             # Add new widgets
-            backend_config = ConfigManager.get_section('backend', profile_name)
-            self.create_section_widgets(backend_layout, backend_config,
-                                        f'profiles.{profile_name}.backend')
+            backend_config = ConfigManager.get_section("backend", profile_name)
+            self.create_section_widgets(
+                backend_layout, backend_config, f"profiles.{profile_name}.backend"
+            )
         else:
             print(f"Backend group for {profile_name} not found")  # Debug print
             # If the backend group doesn't exist, recreate the entire profile tab
@@ -179,27 +215,42 @@ class SettingsWindow(QWidget):
 
         # Define the order of elements within sections
         element_order = {
-            'global_options': [
-                'active_profiles', 'input_backend', 'print_to_terminal',
-                'status_update_mode', 'noise_on_completion'
+            "global_options": [
+                "active_profiles",
+                "input_backend",
+                "print_to_terminal",
+                "status_update_mode",
+                "noise_on_completion",
             ],
-            'recording_options': [
-                'sound_device', 'gain', 'sample_rate', 'recording_mode',
-                'silence_duration', 'min_duration', 'save_debug_audio'
+            "recording_options": [
+                "sound_device",
+                "gain",
+                "sample_rate",
+                "recording_mode",
+                "silence_duration",
+                "min_duration",
+                "save_debug_audio",
             ],
-            'post_processing': [
-                'writing_key_press_delay', 'keyboard_simulator', 'enabled_scripts'
+            "post_processing": ["writing_key_press_delay", "keyboard_simulator"],
+            "backend": [
+                "model",
+                "compute_type",
+                "device",
+                "model_path",
+                "vad_filter",
+                "condition_on_previous_text",
+                "base_url",
+                "api_key",
+                "temperature",
+                "initial_prompt",
+                "use_streaming",
+                "min_transcription_interval",
+                "vad_silence_duration",
             ],
-            'backend': [
-                'model', 'compute_type', 'device', 'model_path', 'vad_filter',
-                'condition_on_previous_text', 'base_url', 'api_key', 'temperature',
-                'initial_prompt', 'use_streaming', 'min_transcription_interval',
-                'vad_silence_duration'
-            ]
         }
 
         # Get the section name from the section_path
-        section_name = section_path.split('.')[-1]
+        section_name = section_path.split(".")[-1]
 
         # Use the predefined order if available, otherwise use all keys
         ordered_keys = element_order.get(section_name, list(section.keys()))
@@ -210,16 +261,18 @@ class SettingsWindow(QWidget):
                 value = section[key]
                 if isinstance(value, dict):
                     # This is a nested section, create a group box
-                    group_box = QGroupBox(key.replace('_', ' ').capitalize())
+                    group_box = QGroupBox(key.replace("_", " ").capitalize())
                     group_layout = QVBoxLayout()
                     # Pass the nested section path to the next level
-                    self.create_section_widgets(group_layout, value, f'{section_path}.{key}')
+                    self.create_section_widgets(
+                        group_layout, value, f"{section_path}.{key}"
+                    )
                     group_box.setLayout(group_layout)
                     layout.addWidget(group_box)
                 else:
                     # This is a setting, create a widget for it
                     # Pass the full setting path to the widget
-                    widget = self.create_setting_widget(f'{section_path}.{key}', value)
+                    widget = self.create_setting_widget(f"{section_path}.{key}", value)
                     if widget:
                         layout.addWidget(widget)
 
@@ -234,7 +287,7 @@ class SettingsWindow(QWidget):
 
     def add_profile(self):
         new_profile = ConfigManager.create_profile("New Profile")
-        profile_name = new_profile['name']
+        profile_name = new_profile["name"]
         profile_tab = self.create_profile_tab(profile_name)
         self.tabs.addTab(profile_tab, profile_name)
         self.tabs.setCurrentIndex(self.tabs.count() - 1)  # Switch to the new tab
@@ -244,15 +297,20 @@ class SettingsWindow(QWidget):
 
     def delete_profile(self, profile_name):
         if self.tabs.count() <= 2:  # 1 for global options, 1 for the last profile
-            QMessageBox.warning(self, 'Cannot Delete Profile',
-                                'You cannot delete the last remaining profile.')
+            QMessageBox.warning(
+                self,
+                "Cannot Delete Profile",
+                "You cannot delete the last remaining profile.",
+            )
             return
 
-        reply = QMessageBox.question(self, 'Delete Profile',
-                                     f"Delete the profile '{profile_name}'?",
-                                     QMessageBox.StandardButton.Yes |
-                                     QMessageBox.StandardButton.No,
-                                     QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(
+            self,
+            "Delete Profile",
+            f"Delete the profile '{profile_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
         if reply == QMessageBox.StandardButton.Yes:
             if ConfigManager.delete_profile(profile_name):
                 for i in range(self.tabs.count()):
@@ -260,25 +318,38 @@ class SettingsWindow(QWidget):
                         self.tabs.removeTab(i)
                         break
                 self.update_active_profiles_widget()
-                QMessageBox.information(self, 'Profile Deleted',
-                                        f'Profile "{profile_name}" has been deleted.')
+                QMessageBox.information(
+                    self,
+                    "Profile Deleted",
+                    f'Profile "{profile_name}" has been deleted.',
+                )
             else:
-                QMessageBox.warning(self, 'Cannot Delete Profile',
-                                    'The profile could not be deleted. '
-                                    'It may be the last remaining profile.')
+                QMessageBox.warning(
+                    self,
+                    "Cannot Delete Profile",
+                    "The profile could not be deleted. "
+                    "It may be the last remaining profile.",
+                )
 
     def update_active_profiles_widget(self):
-        global_tab = self.tabs.widget(0)  # Assuming global options is always the first tab
+        global_tab = self.tabs.widget(
+            0
+        )  # Assuming global options is always the first tab
         if global_tab and isinstance(global_tab, QScrollArea):
             scroll_content = global_tab.widget()
             if scroll_content and scroll_content.layout():
                 for i in range(scroll_content.layout().count()):
                     widget = scroll_content.layout().itemAt(i).widget()
-                    if (isinstance(widget, SettingWidget) and
-                            widget.config_key == 'global_options.active_profiles'):
-                        all_profiles = [profile['name']
-                                        for profile in ConfigManager.get_profiles()]
-                        active_profiles = ConfigManager.get_value('global_options.active_profiles')
+                    if (
+                        isinstance(widget, SettingWidget)
+                        and widget.config_key == "global_options.active_profiles"
+                    ):
+                        all_profiles = [
+                            profile["name"] for profile in ConfigManager.get_profiles()
+                        ]
+                        active_profiles = ConfigManager.get_value(
+                            "global_options.active_profiles"
+                        )
 
                         # Create a new CheckboxListWidget with updated options
                         new_widget = CheckboxListWidget(all_profiles, active_profiles)
@@ -325,7 +396,7 @@ class SettingWidget(QWidget):
         layout = QGridLayout()
         layout.setContentsMargins(0, 0, 0, 0)
 
-        label_text = self.config_key.split('.')[-1].replace('_', ' ').capitalize()
+        label_text = self.config_key.split(".")[-1].replace("_", " ").capitalize()
         self.label = QLabel(label_text)
 
         self.input_widget = self.create_input_widget()
@@ -341,7 +412,9 @@ class SettingWidget(QWidget):
 
             # Adjust the internal layout of CheckboxListWidget
             checkbox_layout = self.input_widget.layout()
-            checkbox_layout.setContentsMargins(0, 0, 0, 0)  # Remove any internal margins
+            checkbox_layout.setContentsMargins(
+                0, 0, 0, 0
+            )  # Remove any internal margins
             checkbox_layout.setSpacing(2)  # Reduce spacing between checkboxes
         else:
             layout.addWidget(self.label, 0, 0)
@@ -351,44 +424,36 @@ class SettingWidget(QWidget):
         self.setLayout(layout)
 
     def create_input_widget(self):
-        widget_type = self.schema.get('type')
+        widget_type = self.schema.get("type")
 
-        if widget_type == 'bool':
+        if widget_type == "bool":
             return self.create_checkbox()
-        elif widget_type == 'str' and 'options' in self.schema:
+        elif widget_type == "str" and "options" in self.schema:
             return self.create_combobox()
-        elif widget_type == 'int':
+        elif widget_type == "int":
             return self.create_line_edit(QIntValidator())
-        elif widget_type == 'float':
+        elif widget_type == "float":
             return self.create_line_edit(QDoubleValidator())
-        elif widget_type == 'int or null':
+        elif widget_type == "int or null":
             return self.create_line_edit(QIntValidator(), allow_empty=True)
-        elif widget_type == 'str':
+        elif widget_type == "str":
             return self.create_line_edit()
-        elif widget_type == 'list':
+        elif widget_type == "list":
             return self.create_checkbox_list()
-        elif widget_type == 'dir_path':
+        elif widget_type == "dir_path":
             return self.create_dir_path_widget()
         else:
             return QLabel(f"Unsupported type: {widget_type}")
 
     def create_checkbox_list(self):
-        if self.config_key == 'global_options.active_profiles':
-            options = [profile['name'] for profile in ConfigManager.get_profiles()]
-        elif self.config_key.endswith('enabled_scripts'):
-            options = self.get_available_scripts()
+        if self.config_key == "global_options.active_profiles":
+            options = [profile["name"] for profile in ConfigManager.get_profiles()]
         else:
-            options = self.schema.get('options', [])
+            options = self.schema.get("options", [])
 
         widget = CheckboxListWidget(options, self.value)
         widget.optionsChanged.connect(self.update_config)
         return widget
-
-    def get_available_scripts(self):
-        script_folder = 'scripts'  # Adjust this path as needed
-        if os.path.exists(script_folder):
-            return [f for f in os.listdir(script_folder) if f.endswith('.py')]
-        return []
 
     def create_line_edit(self, validator=None, allow_empty=False):
         widget = QLineEdit()
@@ -396,27 +461,28 @@ class SettingWidget(QWidget):
             widget.setValidator(validator)
         if allow_empty:
             widget.setPlaceholderText("Auto")
-        widget.setText(str(self.value) if self.value is not None else '')
+        widget.setText(str(self.value) if self.value is not None else "")
         widget.editingFinished.connect(self.update_config)
         return widget
 
     def create_checkbox(self):
         widget = QCheckBox()
         widget.setChecked(bool(self.value))
-        widget.stateChanged.connect(lambda state: self.update_config(state ==
-                                                                     Qt.CheckState.Checked))
+        widget.stateChanged.connect(
+            lambda state: self.update_config(state == Qt.CheckState.Checked)
+        )
         return widget
 
     def create_combobox(self):
         widget = QComboBox()
-        widget.addItems(self.schema['options'])
+        widget.addItems(self.schema["options"])
         widget.setCurrentText(str(self.value))
         widget.currentTextChanged.connect(self.update_config)
         return widget
 
     def create_list_widget(self):
         widget = QLineEdit()
-        widget.setText(', '.join(map(str, self.value)))
+        widget.setText(", ".join(map(str, self.value)))
         widget.editingFinished.connect(self.update_config)
         return widget
 
@@ -425,7 +491,7 @@ class SettingWidget(QWidget):
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        line_edit = QLineEdit(self.value if self.value else '')
+        line_edit = QLineEdit(self.value if self.value else "")
         browse_button = QPushButton("Browse")
 
         layout.addWidget(line_edit)
@@ -443,7 +509,10 @@ class SettingWidget(QWidget):
         return widget
 
     def update_config(self, value=None):
-        if isinstance(self.input_widget, QWidget) and self.schema.get('type') == 'dir_path':
+        if (
+            isinstance(self.input_widget, QWidget)
+            and self.schema.get("type") == "dir_path"
+        ):
             line_edit = self.input_widget.findChild(QLineEdit)
             if line_edit:
                 value = line_edit.text()
@@ -455,20 +524,23 @@ class SettingWidget(QWidget):
         elif isinstance(self.input_widget, QComboBox):
             value = self.input_widget.currentText()
         elif isinstance(self.input_widget, QLineEdit):
-            if self.schema.get('type') == 'int':
+            if self.schema.get("type") == "int":
                 value = int(self.input_widget.text())
-            elif self.schema.get('type') == 'float':
+            elif self.schema.get("type") == "float":
                 value = float(self.input_widget.text())
-            elif self.schema.get('type') == 'int or null':
-                value = int(self.input_widget.text()) if self.input_widget.text() else None
+            elif self.schema.get("type") == "int or null":
+                value = (
+                    int(self.input_widget.text()) if self.input_widget.text() else None
+                )
             else:
                 value = self.input_widget.text()
 
         ConfigManager.set_value(self.config_key, value)
 
     def show_help(self):
-        QMessageBox.information(self, "Help", self.schema.get('description',
-                                                              'No description available.'))
+        QMessageBox.information(
+            self, "Help", self.schema.get("description", "No description available.")
+        )
 
 
 class CheckboxListWidget(QWidget):
@@ -494,8 +566,11 @@ class CheckboxListWidget(QWidget):
         self.setLayout(layout)
 
     def update_selected_options(self):
-        self.selected_options = [option for option, checkbox in self.checkboxes.items()
-                                 if checkbox.isChecked()]
+        self.selected_options = [
+            option
+            for option, checkbox in self.checkboxes.items()
+            if checkbox.isChecked()
+        ]
         self.optionsChanged.emit(self.selected_options)
 
     def get_selected_options(self):

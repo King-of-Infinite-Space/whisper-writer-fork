@@ -105,10 +105,7 @@ profiles:
           - pynput-pyperclip
           - uinput-pyperclip
           - pyperclip
-      enabled_scripts:
-        value: []
-        type: list
-        description: "List of post-processing scripts to apply (in order). All scripts from the scripts folder will be displayed here. You can add new ones simply by coping add_trailing_space.py under a new name and editing it however you want."
+
 
 # Available backend options
 available_backends:
