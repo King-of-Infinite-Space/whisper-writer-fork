@@ -1,4 +1,5 @@
 from typing import Optional, List
+import threading
 
 from input_backend.input_backend_base import InputBackendBase
 from enums import KeyCode, InputEvent
@@ -6,11 +7,13 @@ from enums import KeyCode, InputEvent
 
 class EvdevBackend(InputBackendBase):
     """Backend for handling input events using the evdev library."""
+
     @classmethod
     def is_available(cls) -> bool:
         """Check if the evdev library is available."""
         try:
             import evdev
+
             return True
         except ImportError:
             return False
@@ -18,25 +21,31 @@ class EvdevBackend(InputBackendBase):
     def __init__(self):
         """Initialize the EvdevBackend."""
         import evdev
-        import threading
+
         self.devices: List[evdev.InputDevice] = []
         self.key_map: Optional[dict] = None
         self.evdev = None
         self.thread: Optional[threading.Thread] = None
         self.stop_event: Optional[threading.Event] = None
+        self.device_lock: threading.Lock = threading.Lock()
+        self.udev_observer = None
 
     def start(self):
         """Start the evdev backend."""
         import evdev
-        import threading
+
         self.evdev = evdev
         self.key_map = self._create_key_map()
 
-        # Initialize input devices, excluding our virtual keyboard
-        self.devices = [evdev.InputDevice(path) for path in evdev.list_devices()
-                        if not self._is_virtual_keyboard(evdev.InputDevice(path))]
+        with self.device_lock:
+            self.devices = [
+                evdev.InputDevice(path)
+                for path in evdev.list_devices()
+                if not self._is_virtual_keyboard(evdev.InputDevice(path))
+            ]
         self.stop_event = threading.Event()
         self._setup_signal_handler()
+        self._start_udev_monitor()
         self._start_listening()
 
     def _is_virtual_keyboard(self, device):
@@ -53,37 +62,126 @@ class EvdevBackend(InputBackendBase):
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
 
+    def _start_udev_monitor(self):
+        """Start monitoring for device hotplug events."""
+        try:
+            import pyudev
+        except ImportError:
+            print("pyudev not available, hotplug detection disabled")
+            return
+
+        context = pyudev.Context()
+        monitor = pyudev.Monitor.from_netlink(context)
+        monitor.filter_by(subsystem="input")
+        self.udev_observer = pyudev.MonitorObserver(monitor, self._on_udev_event)
+        self.udev_observer.start()
+
+    def _on_udev_event(self, action, device):
+        """Handle udev device add/remove events."""
+        if self.stop_event.is_set():
+            return
+
+        if action == "add":
+            self._handle_device_added(device)
+        elif action == "remove":
+            self._handle_device_removed(device)
+
+    def _handle_device_added(self, udev_device):
+        """Handle a new input device being added."""
+        import time
+
+        if not udev_device.device_node:
+            return
+
+        device_path = udev_device.device_node
+        if not device_path.startswith("/dev/input/event"):
+            return
+
+        for attempt in range(5):
+            try:
+                new_device = self.evdev.InputDevice(device_path)
+                break
+            except (FileNotFoundError, PermissionError, OSError):
+                time.sleep(0.1 * (attempt + 1))
+        else:
+            return
+
+        if self._is_virtual_keyboard(new_device):
+            return
+
+        if not self._is_keyboard_device(new_device):
+            return
+
+        with self.device_lock:
+            if not any(d.path == device_path for d in self.devices):
+                self.devices.append(new_device)
+                print(f"Added input device: {new_device.name}")
+
+    def _handle_device_removed(self, udev_device):
+        """Handle an input device being removed."""
+        if not udev_device.device_node:
+            return
+
+        device_path = udev_device.device_node
+        with self.device_lock:
+            for device in self.devices[:]:
+                if device.path == device_path:
+                    self.devices.remove(device)
+                    print(f"Removed input device: {device.name}")
+                    break
+
+    def _is_keyboard_device(self, device):
+        """Check if a device has keyboard capabilities."""
+        try:
+            capabilities = device.capabilities()
+            ev_key = 0x01
+            if ev_key in capabilities:
+                keys = capabilities[ev_key]
+                key_range = range(1, 84)
+                if any(k in key_range for k in keys):
+                    return True
+        except Exception:
+            pass
+        return False
+
     def stop(self):
         """Stop the evdev backend and clean up resources."""
         if self.stop_event:
             self.stop_event.set()
 
+        if self.udev_observer:
+            self.udev_observer.stop()
+
         if self.thread:
-            self.thread.join(timeout=1)  # Wait for up to 1 second
+            self.thread.join(timeout=1)
             if self.thread.is_alive():
                 print("Thread did not terminate in time. Forcing exit.")
 
-        # Close all devices
-        for device in self.devices:
-            try:
-                device.close()
-            except Exception:
-                pass  # Ignore errors when closing devices
-        self.devices = []
+        with self.device_lock:
+            for device in self.devices:
+                try:
+                    device.close()
+                except Exception:
+                    pass
+            self.devices = []
 
     def _start_listening(self):
         """Start the listening thread."""
-        import threading
         self.thread = threading.Thread(target=self._evdev_thread)
         self.thread.start()
 
     def _evdev_thread(self):
         """Main loop for listening to input events."""
         import select
+
         while not self.stop_event.is_set():
             try:
-                # Wait for input events with a timeout of 0.1 seconds
-                r, _, _ = select.select(self.devices, [], [], 0.1)
+                with self.device_lock:
+                    devices = self.devices[:]
+                if not devices:
+                    self.stop_event.wait(0.1)
+                    continue
+                r, _, _ = select.select(devices, [], [], 0.1)
                 for device in r:
                     self._read_device_events(device)
             except Exception as e:
@@ -105,12 +203,16 @@ class EvdevBackend(InputBackendBase):
     def _handle_device_error(self, device, error):
         """Handle errors that occur when reading from a device."""
         import errno
+
         if isinstance(error, BlockingIOError) and error.errno == errno.EAGAIN:
-            return  # Non-blocking IO is expected, just continue
-        if isinstance(error, OSError) and (error.errno == errno.EBADF or
-                                           error.errno == errno.ENODEV):
+            return
+        if isinstance(error, OSError) and (
+            error.errno == errno.EBADF or error.errno == errno.ENODEV
+        ):
             print(f"Device {device.path} is no longer available. Removing it.")
-            self.devices.remove(device)
+            with self.device_lock:
+                if device in self.devices:
+                    self.devices.remove(device)
         else:
             print(f"Unexpected error reading device: {error}")
 
@@ -151,7 +253,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_RIGHTALT: KeyCode.ALT_RIGHT,
             self.evdev.ecodes.KEY_LEFTMETA: KeyCode.META_LEFT,
             self.evdev.ecodes.KEY_RIGHTMETA: KeyCode.META_RIGHT,
-
             # Function keys
             self.evdev.ecodes.KEY_F1: KeyCode.F1,
             self.evdev.ecodes.KEY_F2: KeyCode.F2,
@@ -165,7 +266,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_F10: KeyCode.F10,
             self.evdev.ecodes.KEY_F11: KeyCode.F11,
             self.evdev.ecodes.KEY_F12: KeyCode.F12,
-
             # Number keys
             self.evdev.ecodes.KEY_1: KeyCode.ONE,
             self.evdev.ecodes.KEY_2: KeyCode.TWO,
@@ -177,7 +277,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_8: KeyCode.EIGHT,
             self.evdev.ecodes.KEY_9: KeyCode.NINE,
             self.evdev.ecodes.KEY_0: KeyCode.ZERO,
-
             # Letter keys
             self.evdev.ecodes.KEY_A: KeyCode.A,
             self.evdev.ecodes.KEY_B: KeyCode.B,
@@ -205,7 +304,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_X: KeyCode.X,
             self.evdev.ecodes.KEY_Y: KeyCode.Y,
             self.evdev.ecodes.KEY_Z: KeyCode.Z,
-
             # Special keys
             self.evdev.ecodes.KEY_SPACE: KeyCode.SPACE,
             self.evdev.ecodes.KEY_ENTER: KeyCode.ENTER,
@@ -223,13 +321,11 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_SCROLLLOCK: KeyCode.SCROLL_LOCK,
             self.evdev.ecodes.KEY_PAUSE: KeyCode.PAUSE,
             self.evdev.ecodes.KEY_SYSRQ: KeyCode.PRINT_SCREEN,
-
             # Arrow keys
             self.evdev.ecodes.KEY_UP: KeyCode.UP,
             self.evdev.ecodes.KEY_DOWN: KeyCode.DOWN,
             self.evdev.ecodes.KEY_LEFT: KeyCode.LEFT,
             self.evdev.ecodes.KEY_RIGHT: KeyCode.RIGHT,
-
             # Numpad keys
             self.evdev.ecodes.KEY_KP0: KeyCode.NUMPAD_0,
             self.evdev.ecodes.KEY_KP1: KeyCode.NUMPAD_1,
@@ -247,7 +343,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_KPSLASH: KeyCode.NUMPAD_DIVIDE,
             self.evdev.ecodes.KEY_KPDOT: KeyCode.NUMPAD_DECIMAL,
             self.evdev.ecodes.KEY_KPENTER: KeyCode.NUMPAD_ENTER,
-
             # Additional special characters
             self.evdev.ecodes.KEY_MINUS: KeyCode.MINUS,
             self.evdev.ecodes.KEY_EQUAL: KeyCode.EQUALS,
@@ -260,7 +355,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_COMMA: KeyCode.COMMA,
             self.evdev.ecodes.KEY_DOT: KeyCode.PERIOD,
             self.evdev.ecodes.KEY_SLASH: KeyCode.SLASH,
-
             # Media keys
             self.evdev.ecodes.KEY_MUTE: KeyCode.MUTE,
             self.evdev.ecodes.KEY_VOLUMEDOWN: KeyCode.VOLUME_DOWN,
@@ -268,7 +362,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_PLAYPAUSE: KeyCode.PLAY_PAUSE,
             self.evdev.ecodes.KEY_NEXTSONG: KeyCode.NEXT_TRACK,
             self.evdev.ecodes.KEY_PREVIOUSSONG: KeyCode.PREV_TRACK,
-
             # Additional function keys (if needed)
             self.evdev.ecodes.KEY_F13: KeyCode.F13,
             self.evdev.ecodes.KEY_F14: KeyCode.F14,
@@ -282,7 +375,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_F22: KeyCode.F22,
             self.evdev.ecodes.KEY_F23: KeyCode.F23,
             self.evdev.ecodes.KEY_F24: KeyCode.F24,
-
             # Additional Media and Special Function Keys
             self.evdev.ecodes.KEY_PLAYPAUSE: KeyCode.MEDIA_PLAY_PAUSE,
             self.evdev.ecodes.KEY_STOP: KeyCode.MEDIA_STOP,
@@ -318,7 +410,6 @@ class EvdevBackend(InputBackendBase):
             self.evdev.ecodes.KEY_MENU: KeyCode.MENU,
             self.evdev.ecodes.KEY_CLEAR: KeyCode.CLEAR,
             self.evdev.ecodes.KEY_SCREENLOCK: KeyCode.LOCK,
-
             # Mouse Buttons
             self.evdev.ecodes.BTN_LEFT: KeyCode.MOUSE_LEFT,
             self.evdev.ecodes.BTN_RIGHT: KeyCode.MOUSE_RIGHT,

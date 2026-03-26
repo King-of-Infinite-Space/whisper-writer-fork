@@ -16,4 +16,5 @@ scipy==1.17.1
 setuptools==74.1.2
 six==1.16.0
 soundfile==0.12.1
+pyudev==0.24.0
 webrtcvad==2.0.10
